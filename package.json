@@ -1,0 +1,33 @@
+{
+    "name": "@clapp/hmr",
+    "version": "1.0.0",
+    "description": "🔥 Module Reload",
+    "main": "./lib/main.js",
+    "types": "./lib/main.d.ts",
+    "scripts": {
+        "release": "standard-version",
+        "dev": "tsc --build --watch",
+        "build": "rimraf lib && tsc --build"
+    },
+    "author": "Sergiu Toderascu",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/clappcodes/hmr"
+    },
+    "keywords": [
+        "clapp",
+        "hot",
+        "module",
+        "reload",
+        "hmr"
+    ],
+    "dependencies": {
+        "chokidar": "^3.5.3"
+    },
+    "devDependencies": {
+        "rimraf": "^5.0.5",
+        "standard-version": "^9.5.0",
+        "typescript": "^5.3.3"
+    }
+}
