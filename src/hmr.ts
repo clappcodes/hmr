@@ -45,8 +45,10 @@ const handleFileChange =
 		cache: Dict<NodeModule>,
 		watcher: chockidar.FSWatcher
 	) =>
-	(eventType: string, filePath: string, stats: any) => {
-		const moduleId = path.resolve(options.watchDir!, filePath);
+	(event: string, filePath: string, stats: any) => {
+		// const moduleId = path.resolve(options.watchDir!, filePath);
+		const moduleId = path.resolve(watcher.options.cwd!, filePath);
+
 		const tree = buildParentTree(rootModule);
 
 		if (tree[moduleId]) {
@@ -62,10 +64,8 @@ const handleFileChange =
 		}
 
 		callChangeHandler(cb, {
-			type: "change",
-			eventType,
+			event,
 			filePath,
-			stats,
 			rootModule,
 			moduleId,
 			parentTree: tree,
@@ -76,15 +76,17 @@ const handleFileChange =
 	};
 
 export type HMROptions = {
-	watchFilePatterns?: string[];
+	watch?: string[];
+	ignore?: string[];
 	watchDir?: string;
 	chokidar?: chockidar.WatchOptions;
 	debug?: boolean;
+	cwd?: string;
+	followSymlinks?: boolean;
 };
 
 export type HMREvent = {
-	type: "init" | "change";
-	eventType?: string;
+	event?: string;
 	filePath?: string;
 	stats?: any;
 	rootModule?: NodeModule;
@@ -96,15 +98,20 @@ export type HMREvent = {
 	rootDir?: string;
 };
 
-export default function hmr(
-	cb: (event: HMREvent) => void,
-	options: HMROptions = {},
+const watchers: Dict<chockidar.FSWatcher> = {};
+hmr.watchers = watchers;
+
+export default async function hmr(
 	rootModule: NodeModule = require.main!,
+	cb: (event: HMREvent) => void,
+	options: HMROptions = {
+		watch: ["**/*.js", "**/*.json"],
+		followSymlinks: false,
+	},
 	cache: Dict<NodeModule> = require.cache
 ) {
-	let { watchFilePatterns } = options;
-	if (!watchFilePatterns) {
-		watchFilePatterns = options.watchFilePatterns = ["**/*.ts", "**/*.js"];
+	if (!options.watch) {
+		options.watch = ["**/*.js", "**/*.json"];
 	}
 
 	const rootDir = path.dirname(rootModule.filename);
@@ -115,13 +122,61 @@ export default function hmr(
 		options.watchDir = rootDir;
 	}
 
-	const watcher = chockidar.watch(watchFilePatterns, {
-		ignoreInitial: true,
-		cwd: options.watchDir,
-		ignored: [".git", "node_modules"],
-		...options.chokidar,
+	const runWatcher = () => {
+		const watcher = (watchers[rootModule.id] = chockidar.watch(options.watch!, {
+			ignoreInitial: true,
+			cwd: options.cwd || options.watchDir,
+			ignored: options.ignore || [
+				".git",
+				"**/.git",
+				"node_modules",
+				"**/node_modules/**",
+				"**/**/node_modules/**",
+			],
+			followSymlinks:
+				typeof options.followSymlinks === "undefined"
+					? false
+					: options.followSymlinks,
+			...options.chokidar,
+		}));
+		// @ts-ignore
+		watcher.on(
+			"all",
+			handleFileChange(cb, options, rootModule, cache, watcher)
+		);
+
+		return watcher;
+	};
+
+	if (watchers[rootModule.id]) {
+		const _watcher = watchers[rootModule.id]!;
+		console.warn(
+			// @ts-ignore
+			`[HMR] Whatcher active. (${rootModule.id}:${_watcher.closed}). Closing...`
+		);
+
+		await _watcher.close();
+		delete watchers[rootModule.id];
+
+		console.log(
+			// @ts-ignore
+			`[HMR] Watcher closed. (${rootModule.id}:${_watcher.closed})`
+		);
+	}
+
+	const watcher = runWatcher();
+
+	callChangeHandler(cb, {
+		event: "init",
+		watcher,
+		rootDir,
+		rootModule,
+		moduleTree: [],
+		parentTree: {},
+		filePath: undefined,
+		moduleId: rootModule.id,
+		options,
 	});
-	// @ts-ignore
-	watcher.on("all", handleFileChange(cb, options, rootModule, cache, watcher));
-	callChangeHandler(cb, { type: "init", rootDir, rootModule, options });
+
+	return watcher;
 }

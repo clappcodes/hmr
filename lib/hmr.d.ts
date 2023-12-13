@@ -8,14 +8,16 @@ interface ParentModules {
 }
 export declare const buildParentTree: (module: NodeModule, parentChain?: string[]) => ParentModules;
 export type HMROptions = {
-    watchFilePatterns?: string[];
+    watch?: string[];
+    ignore?: string[];
     watchDir?: string;
     chokidar?: chockidar.WatchOptions;
     debug?: boolean;
+    cwd?: string;
+    followSymlinks?: boolean;
 };
 export type HMREvent = {
-    type: "init" | "change";
-    eventType?: string;
+    event?: string;
     filePath?: string;
     stats?: any;
     rootModule?: NodeModule;
@@ -26,5 +28,8 @@ export type HMREvent = {
     watcher?: chockidar.FSWatcher;
     rootDir?: string;
 };
-export default function hmr(cb: (event: HMREvent) => void, options?: HMROptions, rootModule?: NodeModule, cache?: Dict<NodeModule>): void;
-export {};
+declare function hmr(rootModule: NodeModule | undefined, cb: (event: HMREvent) => void, options?: HMROptions, cache?: Dict<NodeModule>): Promise<chockidar.FSWatcher>;
+declare namespace hmr {
+    var watchers: Dict<chockidar.FSWatcher>;
+}
+export default hmr;
